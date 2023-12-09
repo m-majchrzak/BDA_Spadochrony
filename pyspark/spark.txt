@@ -16,11 +16,13 @@ gcloud dataproc jobs submit pyspark script_pubsub_stock.py ^
     --properties=spark.master=yarn ^
     -- --project_number=671780404044 --location=europe-central2 --subscription_id=stock-spark
 
-gcloud dataproc jobs submit pyspark script_batch_weather.py ^
+gcloud dataproc jobs submit pyspark script_batch_openweather.py ^
     --region=europe-central2 ^
     --cluster=bda-dataproc ^
     --driver-log-levels=root=INFO ^
     --properties=spark.master=yarn 
+
+gcloud dataproc jobs submit pyspark script_batch_openweather.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=INFO --properties=spark.master=yarn
 
 gcloud dataproc jobs submit pyspark script_batch_tomtom.py ^
     --region=europe-central2 ^
@@ -28,9 +30,28 @@ gcloud dataproc jobs submit pyspark script_batch_tomtom.py ^
     --driver-log-levels=root=INFO ^
     --properties=spark.master=yarn 
 
+gcloud dataproc jobs submit pyspark script_batch_tomtom.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=INFO --properties=spark.master=yarn
 
 gcloud dataproc jobs submit pyspark script_batch_stock.py ^
     --region=europe-central2 ^
     --cluster=bda-dataproc ^
     --driver-log-levels=root=INFO ^
     --properties=spark.master=yarn 
+gcloud dataproc jobs submit pyspark script_batch_stock.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=INFO --properties=spark.master=yarn
+
+gcloud dataproc jobs submit pyspark script_ML.py ^
+    --region=europe-central2 ^
+    --cluster=bda-dataproc ^
+    --driver-log-levels=root=INFO ^
+    --properties=spark.master=yarn 
+gcloud dataproc jobs submit pyspark script_ML_stock.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=INFO --properties=spark.master=yarn
+
+gcloud dataproc jobs submit pyspark script_ML_tomtom.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=INFO --properties=spark.master=yarn
+
+gcloud dataproc jobs submit pyspark check_python_env.py --cluster=bda-dataproc --region=europe-central2 -- pandas scipy
+
+gcloud dataproc jobs submit pyspark merge_openweather.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=INFO --properties=spark.master=yarn
+
+gcloud dataproc jobs submit pyspark merge_stock.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=INFO --properties=spark.master=yarn
+
+gcloud dataproc jobs submit pyspark merge_tomtom.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=INFO --properties=spark.master=yarn
