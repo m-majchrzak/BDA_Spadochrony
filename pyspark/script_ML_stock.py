@@ -7,6 +7,9 @@ import os
 from operator import add
 from functools import reduce
 from xgboost.spark import SparkXGBRegressor
+from pyspark.ml.linalg import Vectors
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.evaluation import RegressionEvaluator
 
 def mode_result(df, colname):
     count = df.groupBy(['date', 'hour', colname]).count().alias('counts')
@@ -106,26 +109,28 @@ df_agg = df_agg.join(weather_main_result, ['date', 'hour']).sort("date", "hour",
 ### One-hot encoding ###
 
 df_onehot = df_agg.select(col('date'), col('hour'), col('weather_main')) 
-weather_main_values = ['thunderstorm',
-                       'drizzle',
-                       'rain',
-                       'snow',
-                       'clear', 
-                       'clouds']
-df_onehot = df_onehot.withColumn('thunderstorm', when(df_onehot.weather_main == 'Thunderstorm', 1).otherwise(0)) \
-    .withColumn('drizzle', when(df_onehot.weather_main == 'Drizzle', 1).otherwise(0)) \
-    .withColumn('rain', when(df_onehot.weather_main == 'Rain', 1).otherwise(0)) \
-    .withColumn('snow', when(df_onehot.weather_main == 'Snow', 1).otherwise(0)) \
-    .withColumn('clear', when(df_onehot.weather_main == 'Clear', 1).otherwise(0)) \
-    .withColumn('clouds', when(df_onehot.weather_main == 'Clouds', 1).otherwise(0)) \
+weather_main_values = ['wm_thunderstorm',
+                       'wm_drizzle',
+                       'wm_rain',
+                       'wm_snow',
+                       'wm_clear', 
+                       'wm_clouds']
+df_onehot = df_onehot.withColumn('wm_thunderstorm', when(df_onehot.weather_main == 'Thunderstorm', 1).otherwise(0)) \
+    .withColumn('wm_drizzle', when(df_onehot.weather_main == 'Drizzle', 1).otherwise(0)) \
+    .withColumn('wm_rain', when(df_onehot.weather_main == 'Rain', 1).otherwise(0)) \
+    .withColumn('wm_snow', when(df_onehot.weather_main == 'Snow', 1).otherwise(0)) \
+    .withColumn('wm_clear', when(df_onehot.weather_main == 'Clear', 1).otherwise(0)) \
+    .withColumn('wm_clouds', when(df_onehot.weather_main == 'Clouds', 1).otherwise(0)) \
     .withColumn('pom',reduce(add, [F.col(x) for x in weather_main_values])) 
-df_onehot = df_onehot.withColumn('other', when(df_onehot.pom == 0, 1).otherwise(0)) \
-    .drop(df_onehot.pom) \
+df_onehot = df_onehot.withColumn('wm_other', when(df_onehot.pom == 0, 1).otherwise(0)) 
+df_onehot = df_onehot.drop(df_onehot.pom) \
     .drop(df_onehot.weather_main)
 
-df = df_agg.join(df_onehot, ['date', 'hour']) \
-    .drop(df.weather_main) \
+
+df = df_agg.join(df_onehot, ['date', 'hour']) 
+df = df.drop(df.weather_main) \
     .sort('date', 'hour', ascending=[True, True])
+
 
 ### TARGET VARIABLE ###
 stock_schema = StructType([
@@ -157,33 +162,48 @@ df_stock_agg = df_stock.groupBy("date", "hour") \
     .agg(count("transactions").alias("number_of_transactions")) \
     .sort("date", "hour", ascending=[True, True])
 
-df = df.join(df_stock_agg, ['date', 'hour']) \
-    .drop(df.date) \
+df = df.join(df_stock_agg, ['date', 'hour']) 
+df = df.drop(df.date) \
     .drop(df.hour)
 
 #df.show()
+
+### DROP NULLs ###
+
+df = df.na.drop("any")
+# df_null = df.select([count(when(isnan(c) | col(c).isNull(), c)).alias(c) for c in df.columns])
+# df_null.show()
+
 ### TRAIN/TEST SPLIT ###
 
 train_df, test_df = df.randomSplit([0.7, 0.3], seed=42)
 
-
-# assume the label column is named "class"
 label_name = "number_of_transactions"
 
-# get a list with feature column names
-feature_names = [x.name for x in train_df.schema if x.name != label_name]
-features = train_df.select(*feature_names)
-features.show()
+# get a column with feature colums combined
+assembler = VectorAssembler(
+    inputCols=[x.name for x in train_df.schema if x.name != label_name],
+    outputCol="features")
+train_df = assembler.transform(train_df)
 
 ### MODEL ###
 spark_reg_estimator = SparkXGBRegressor(
-  features_col=features,
-  label_col=label_name,
-  num_workers=2
+    features_col='features',
+    label_col=label_name,
+    tree_method='hist'
 )
 
-model = spark_reg_estimator.fit(df)
+model = spark_reg_estimator.fit(train_df)
 
 # predict on test data
+test_df = assembler.transform(test_df)
 predict_df = model.transform(test_df)
 predict_df.show()
+
+evaluator = RegressionEvaluator(predictionCol="prediction", labelCol=label_name)
+mae_value = evaluator.evaluate(predict_df, {evaluator.metricName: "mae"})
+print("###")
+print(f"The MAE of the prediction is {mae_value}")
+print("###")
+# save the model
+model.save("/models/stock_xgboost_model")
