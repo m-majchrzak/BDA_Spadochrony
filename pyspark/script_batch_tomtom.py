@@ -71,6 +71,7 @@ df_live = df_live.drop('timeValidity')
 
 df_hist = read_parquets_to_df(folder="tomtom/historical", schema=tomtom_schema)
 df_hist = df_hist.drop('UNNAMED_FIELD')
+df_hist = df_hist.drop('timeValidity')
 
 df = df_hist.unionByName(df_live)
 df = df.withColumn('ny_timestamp', from_utc_timestamp(col('observationTime'), 'America/New_York'))
@@ -113,3 +114,5 @@ df_agg = df_agg.join(probabilityOfOccurence_result_by_category, ['date', 'hour',
 # ew ToDo - uzupełnianie 0 tam, gdzie nie było żadnego wystąpienia zdarzenia danego typu w danej godzinie
 
 df_agg.show()
+#df_agg.show(n=df_agg.count(), truncate = False) 
+print(f"The dataframe has {df_agg.count()} rows.")

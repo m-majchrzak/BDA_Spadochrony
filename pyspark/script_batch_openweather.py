@@ -92,5 +92,7 @@ weather_main_result = mode_result(df, 'weather_main')
 weather_description_result = mode_result(df, 'weather_description')
 
 df_agg = df_agg.join(weather_main_result, ['date', 'hour']).join(weather_description_result, ['date', 'hour']).sort("date", "hour", ascending=[True, True])
+
 df_agg.show()
-print(df_agg.select('date').distinct().collect())
+#df_agg.show(n=df_agg.count(), truncate = False)
+print(f"The dataframe has {df_agg.count()} rows.")
