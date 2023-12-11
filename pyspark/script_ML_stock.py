@@ -163,7 +163,7 @@ df_stock_agg = df_stock.groupBy("date", "hour") \
     .sort("date", "hour", ascending=[True, True])
 
 df = df.join(df_stock_agg, ['date', 'hour']) 
-df = df.drop(df.date) 
+df = df.drop(df.date)
 
 #df.show()
 
@@ -184,25 +184,39 @@ assembler = VectorAssembler(
     inputCols=[x.name for x in train_df.schema if x.name != label_name],
     outputCol="features")
 train_df = assembler.transform(train_df)
+test_df = assembler.transform(test_df)
 
-### MODEL ###
+## MODEL ###
+params={
+
+    "objective":"reg:absoluteerror",
+    "max_depth":5,
+    "n_estimators":100,
+    "min_child_weight":5,
+}
 spark_reg_estimator = SparkXGBRegressor(
     features_col='features',
     label_col=label_name,
-    tree_method='hist'
+    tree_method='hist',
+    **params 
 )
 
+#train the model
 model = spark_reg_estimator.fit(train_df)
 
+
 # predict on test data
-test_df = assembler.transform(test_df)
+train_predict_df = model.transform(train_df)
 predict_df = model.transform(test_df)
-predict_df.show()
 
 evaluator = RegressionEvaluator(predictionCol="prediction", labelCol=label_name)
-mae_value = evaluator.evaluate(predict_df, {evaluator.metricName: "mae"})
-print("###")
-print(f"The MAE of the prediction is {mae_value}")
-print("###")
+
+print("###\n\n\n")
+print(params)
+print(f"The MAE for train {evaluator.evaluate(train_predict_df, {evaluator.metricName: 'mae'})}")
+print(f"The MAE for test {evaluator.evaluate(predict_df, {evaluator.metricName: 'mae'})}")
+print("\n\n\n###")
+
+
 # save the model
-model.save("/models/stock_xgboost_model")
+# model.save("/models/stock_xgboost_model_hour")
