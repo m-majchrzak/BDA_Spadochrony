@@ -182,6 +182,14 @@ df_tomtom_agg = df_tomtom.filter(col("length").isNotNull()) \
 df_tomtom_agg = df_tomtom_agg.groupBy('date', 'hour') \
     .agg(round(avg("length_of_traffic_jams"),2).alias("avg_length_of_traffic_jams")) \
 
+# Add lagged target variable as it is a time series!!!
+windowSpec = Window().orderBy("date", "hour")
+
+df_tomtom_agg = (df_tomtom_agg
+                .withColumn("avg_length_of_traffic_jams_1_hour_ago", lag("avg_length_of_traffic_jams",offset=1,default=0).over(windowSpec))
+                # .withColumn("avg_length_of_traffic_jams_8_hours_ago", lag("avg_length_of_traffic_jams",offset=8,default=0).over(windowSpec))
+                # .withColumn("avg_length_of_traffic_jams_24_hours_ago", lag("avg_length_of_traffic_jams",offset=24,default=0).over(windowSpec))
+)
 df_tomtom_agg.show()
 
 df = df.join(df_tomtom_agg, ['date', 'hour']) 
@@ -207,28 +215,40 @@ assembler = VectorAssembler(
     inputCols=[x.name for x in train_df.schema if x.name != label_name],
     outputCol="features")
 train_df = assembler.transform(train_df)
-
-## MODEL ###
-spark_reg_estimator = SparkXGBRegressor(
-    features_col='features',
-    label_col=label_name,
-    tree_method='hist'
-)
-#train_df.show()
-model = spark_reg_estimator.fit(train_df)
-
-# predict on test data
 test_df = assembler.transform(test_df)
-predict_df = model.transform(test_df)
-predict_df.show()
 
-evaluator = RegressionEvaluator(predictionCol="prediction", labelCol=label_name)
-mae_value = evaluator.evaluate(predict_df, {evaluator.metricName: "mae"})
-print("###")
-print(f"The MAE of the prediction is {mae_value}")
-print("###")
+for max_depth in [4,6,8]:
+    for n_estimators in [5,10,15,20,25]:
+        for min_child_weight in [2,4,6]:
+            ## MODEL ###
+            spark_reg_estimator = SparkXGBRegressor(
+                features_col='features',
+                label_col=label_name,
+                tree_method='hist',
+                num_workers=1,
+                objective="reg:absoluteerror",
+                max_depth=max_depth,
+                n_estimators=n_estimators,
+                min_child_weight=min_child_weight,
+
+            )
+            #train_df.show()
+            model = spark_reg_estimator.fit(train_df)
+
+
+            # predict
+            train_predict_df = model.transform(train_df)
+            predict_df = model.transform(test_df)
+
+            evaluator = RegressionEvaluator(predictionCol="prediction", labelCol=label_name)
+
+            print("###\n\n\n")
+            print(f"Max_depth={max_depth}, N_trees={n_estimators}")
+            print(f"The MAE for train {evaluator.evaluate(train_predict_df, {evaluator.metricName: 'mae'})}")
+            print(f"The MAE for test {evaluator.evaluate(predict_df, {evaluator.metricName: 'mae'})}")
+            print("\n\n\n###")
 # save the model
-model.save("/models/tomtom_xgboost_model")
+# model.save("/models/tomtom_xgboost_model")
 # load the model
 #model2 = SparkXGBRankerModel.load("/models/tomtom_xgboost_model")
 
