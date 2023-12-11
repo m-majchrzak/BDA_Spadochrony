@@ -8,6 +8,21 @@ gcloud dataproc jobs submit pyspark script_batch_openweather.py --region=europe-
 
 gcloud dataproc jobs submit pyspark script_batch_tomtom.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=WARN  --properties=spark.master=yarn
 
+gcloud dataproc jobs submit pyspark script_batch_tomtom.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=INFO --properties=spark.master=yarn
+
+gcloud dataproc jobs submit pyspark script_batch_stock.py ^
+    --region=europe-central2 ^
+    --cluster=bda-dataproc ^
+    --driver-log-levels=root=INFO ^
+    --properties=spark.master=yarn 
+gcloud dataproc jobs submit pyspark script_batch_stock.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=INFO --properties=spark.master=yarn
+
+gcloud dataproc jobs submit pyspark script_ML.py ^
+    --region=europe-central2 ^
+    --cluster=bda-dataproc ^
+    --driver-log-levels=root=INFO ^
+    --properties=spark.master=yarn 
+gcloud dataproc jobs submit pyspark script_ML_stock.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=ERROR --properties=spark.master=yarn
 gcloud dataproc jobs submit pyspark script_batch_stock.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=WARN  --properties=spark.master=yarn
 
 gcloud dataproc jobs submit pyspark script_ML_stock.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=WARN  --properties=spark.master=yarn
