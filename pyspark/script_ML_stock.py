@@ -163,6 +163,12 @@ df_stock_agg = df_stock.groupBy("date", "hour") \
     .sort("date", "hour", ascending=[True, True])
 
 df = df.join(df_stock_agg, ['date', 'hour']) 
+
+df.agg(min("date").alias("min_date"),
+               max("date").alias("max_date")).show(truncate=False)
+
+print(f"number of rows:{df.count()}")
+
 df = df.drop(df.date)
 
 #df.show()
@@ -188,7 +194,6 @@ test_df = assembler.transform(test_df)
 
 ## MODEL ###
 params={
-
     "objective":"reg:absoluteerror",
     "max_depth":5,
     "n_estimators":100,
@@ -208,11 +213,14 @@ model = spark_reg_estimator.fit(train_df)
 # predict on test data
 train_predict_df = model.transform(train_df)
 predict_df = model.transform(test_df)
-
+train_predict_df.show()
 evaluator = RegressionEvaluator(predictionCol="prediction", labelCol=label_name)
 
 print("###\n\n\n")
 print(params)
+train_df.agg(avg(label_name)).show()
+test_df.agg(avg(label_name)).show()
+
 print(f"The MAE for train {evaluator.evaluate(train_predict_df, {evaluator.metricName: 'mae'})}")
 print(f"The MAE for test {evaluator.evaluate(predict_df, {evaluator.metricName: 'mae'})}")
 print("\n\n\n###")

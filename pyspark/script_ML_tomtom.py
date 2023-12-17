@@ -87,7 +87,7 @@ spark = SparkSession.builder.appName("read-app").master("yarn").getOrCreate()
 
 #df = spark.read.option("recursiveFileLookup", "true").parquet("/openweather/live")
 
-df_live = read_parquets_to_df(folder="openweather/live", schema=weather_schema)
+df_live = read_parquets_to_df(folder="openweather/historical", schema=weather_schema)
 df_live = df_live.drop('wind_deg')
 #df_live.show()
 
@@ -146,6 +146,7 @@ df_onehot = df_onehot.drop(df_onehot.pom) \
 
 
 df = df_agg.join(df_onehot, ['date', 'hour']) 
+
 df = df.drop(df.weather_main) \
     .sort('date', 'hour', ascending=[True, True])
 
@@ -186,13 +187,15 @@ df_tomtom_agg = df_tomtom_agg.groupBy('date', 'hour') \
 windowSpec = Window().orderBy("date", "hour")
 
 df_tomtom_agg = (df_tomtom_agg
-                .withColumn("avg_length_of_traffic_jams_1_hour_ago", lag("avg_length_of_traffic_jams",offset=1,default=0).over(windowSpec))
-                # .withColumn("avg_length_of_traffic_jams_8_hours_ago", lag("avg_length_of_traffic_jams",offset=8,default=0).over(windowSpec))
-                # .withColumn("avg_length_of_traffic_jams_24_hours_ago", lag("avg_length_of_traffic_jams",offset=24,default=0).over(windowSpec))
+                .withColumn("avg_length_of_traffic_jams_1_hour_ago", lag("avg_length_of_traffic_jams",offset=2,default=0).over(windowSpec))
 )
-df_tomtom_agg.show()
+# df_tomtom_agg.show()
 
 df = df.join(df_tomtom_agg, ['date', 'hour']) 
+result=df.agg(min("date").alias("min_date"),
+               max("date").alias("max_date"))
+print(f"number of rows:{df.count()}")
+result.show(truncate=False)
 df = df.drop(df.date)
 #df.show()
 
@@ -206,7 +209,7 @@ df = df.na.drop("any")
 
 ### TRAIN/TEST SPLIT ###
 
-train_df, test_df = df.randomSplit([0.7, 0.3], seed=42)
+train_df, test_df = df.randomSplit([0.7, 0.3], seed=222)
 
 label_name = "avg_length_of_traffic_jams"
 
@@ -217,39 +220,46 @@ assembler = VectorAssembler(
 train_df = assembler.transform(train_df)
 test_df = assembler.transform(test_df)
 
-for max_depth in [4,6,8]:
-    for n_estimators in [5,10,15,20,25]:
-        for min_child_weight in [2,4,6]:
+
+print("train")
+train_df.agg(avg(label_name)).show()
+print("test")
+test_df.agg(avg(label_name)).show()
+
+
+params={
+    "objective":"reg:absoluteerror",
+    "max_depth":5,
+    "n_estimators":15,
+    "min_child_weight":5,
+}
             ## MODEL ###
-            spark_reg_estimator = SparkXGBRegressor(
-                features_col='features',
-                label_col=label_name,
-                tree_method='hist',
-                num_workers=1,
-                objective="reg:absoluteerror",
-                max_depth=max_depth,
-                n_estimators=n_estimators,
-                min_child_weight=min_child_weight,
+spark_reg_estimator = SparkXGBRegressor(
+    features_col='features',
+    label_col=label_name,
+    tree_method='hist',
+    **params
+)
 
-            )
-            #train_df.show()
-            model = spark_reg_estimator.fit(train_df)
+#train the model
+model = spark_reg_estimator.fit(train_df)
 
 
-            # predict
-            train_predict_df = model.transform(train_df)
-            predict_df = model.transform(test_df)
+# predict on test data
+train_predict_df = model.transform(train_df)
+predict_df = model.transform(test_df)
+train_predict_df.show()
+evaluator = RegressionEvaluator(predictionCol="prediction", labelCol=label_name)
 
-            evaluator = RegressionEvaluator(predictionCol="prediction", labelCol=label_name)
+print("###")
+print(params)
+print(train_df.agg(avg(label_name)).show())
+print(test_df.agg(avg(label_name)).show())
 
-            print("###\n\n\n")
-            print(f"Max_depth={max_depth}, N_trees={n_estimators}")
-            print(f"The MAE for train {evaluator.evaluate(train_predict_df, {evaluator.metricName: 'mae'})}")
-            print(f"The MAE for test {evaluator.evaluate(predict_df, {evaluator.metricName: 'mae'})}")
-            print("\n\n\n###")
+print(f"The MAE for train {evaluator.evaluate(train_predict_df, {evaluator.metricName: 'mae'})}")
+print(f"The MAE for test {evaluator.evaluate(predict_df, {evaluator.metricName: 'mae'})}")
+print("###")
+
+
 # save the model
 # model.save("/models/tomtom_xgboost_model")
-# load the model
-#model2 = SparkXGBRankerModel.load("/models/tomtom_xgboost_model")
-
-
