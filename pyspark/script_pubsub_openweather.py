@@ -1,7 +1,7 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StringType
 
-project_number = 671780404044
+project_number = 684093064430
 location = "europe-central2" 
 subscription_id = "weather-spark"
 
@@ -17,14 +17,22 @@ sdf = (
 )
 
 sdf = sdf.withColumn("data", sdf.data.cast(StringType()))
+sdf_data = sdf.data
 
 query = (
-    sdf.writeStream.format("console")
+    sdf_data.writeStream.format("console")
     .outputMode("append")
     .trigger(processingTime="1 second")
     .start()
 )
 
-# Wait 120 seconds (must be >= 60 seconds) to start receiving messages.
+# query_data = (
+#     sdf.writeStream.format("console")
+#     .outputMode("append")
+#     .trigger(processingTime="1 second")
+#     .start()
+# )
+
+# # Wait 120 seconds (must be >= 60 seconds) to start receiving messages.
 query.awaitTermination(120)
 query.stop()

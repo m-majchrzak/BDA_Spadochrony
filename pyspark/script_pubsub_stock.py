@@ -1,7 +1,7 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StringType
 
-project_number = 671780404044
+project_number = 684093064430
 location = "europe-central2" 
 subscription_id = "stock-spark"
 

@@ -56,9 +56,11 @@ df_hist = df_hist.drop('UNNAMED_FIELD')
 #df_hist.show()
 
 df = df_hist.unionByName(df_live)
-#df.show()
+#df = df_live
+df.show()
 df = df.withColumn('timestamp_from_datetime', df.datetime.cast(dataType=TimestampType()))
-df = df.withColumn("corrected_timestamp",col("timestamp_from_datetime") - expr("INTERVAL 20 minutes"))
+df = df.withColumn('ny_timestamp', from_utc_timestamp(col('timestamp_from_datetime'), 'America/New_York'))
+df = df.withColumn("corrected_timestamp",col('ny_timestamp') - expr("INTERVAL 20 minutes"))
 df = df.withColumn('date', to_date(df.corrected_timestamp))
 df = df.withColumn('hour', hour(df.corrected_timestamp))
 
@@ -75,3 +77,5 @@ df_agg = df.groupBy("date", "hour") \
 
 
 df_agg.show()
+#df_agg.show(n=df_agg.count(), truncate = False)
+print(f"The dataframe has {df_agg.count()} rows.")

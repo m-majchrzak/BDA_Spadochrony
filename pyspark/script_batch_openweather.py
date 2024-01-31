@@ -72,26 +72,29 @@ df_hist = read_parquets_to_df(folder="openweather/historical", schema=weather_sc
 df_hist = df_hist.drop('UNNAMED_FIELD')
 #df_hist.show()
 
-df = df_hist.unionByName(df_live)
+#df = df_hist.unionByName(df_live)
+df = df_live
+#df.show()
 df = df.withColumn('date', to_date(df.timestamp))
 df = df.withColumn('hour', hour(df.timestamp))
 #df.show()
 
-df_agg = df.groupBy("date", "hour") \
-    .agg(round(avg("temp"),2).alias("temp"), \
-         round(avg("visibility"),2).alias("visibility"), \
-         round(avg("pressure"),2).alias("pressure"), \
-         round(avg("clouds"),2).alias("clouds"), \
-         round(avg("feels_like"),2).alias("feels_like"), \
-         round(avg("temp_max"),2).alias("temp_max"), \
-         round(avg("temp_min"),2).alias("temp_min"), \
-         round(avg("humidity"),2).alias("humidity"), \
-         round(avg("wind_speed"),2).alias("wind_speed")) 
+#df_agg = df.groupBy("date", "hour") \
+df_agg = df.groupBy("date") \
+    .agg(round(avg("temp"),2).alias("avg_temp"), \
+         round(avg("visibility"),2).alias("avg_visibility"), \
+         round(avg("pressure"),2).alias("avg_pressure"), \
+         round(avg("clouds"),2).alias("avg_clouds"), \
+         round(avg("feels_like"),2).alias("avg_feels_like"), \
+         round(avg("temp_max"),2).alias("avg_temp_max"), \
+         round(avg("temp_min"),2).alias("avg_temp_min"), \
+         round(avg("humidity"),2).alias("avg_humidity"), \
+         round(avg("wind_speed"),2).alias("avg_wind_speed")) 
 
 weather_main_result = mode_result(df, 'weather_main')
 weather_description_result = mode_result(df, 'weather_description')
 
-df_agg = df_agg.join(weather_main_result, ['date', 'hour']).join(weather_description_result, ['date', 'hour']).sort("date", "hour", ascending=[True, True])
+#df_agg = df_agg.join(weather_main_result, ['date', 'hour']).join(weather_description_result, ['date', 'hour']).sort("date", "hour", ascending=[True, True])
 
 df_agg.show()
 #df_agg.show(n=df_agg.count(), truncate = False)

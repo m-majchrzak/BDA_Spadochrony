@@ -163,8 +163,7 @@ df_stock_agg = df_stock.groupBy("date", "hour") \
     .sort("date", "hour", ascending=[True, True])
 
 df = df.join(df_stock_agg, ['date', 'hour']) 
-df = df.drop(df.date) \
-    .drop(df.hour)
+df = df.drop(df.date) 
 
 #df.show()
 

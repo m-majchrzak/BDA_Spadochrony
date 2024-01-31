@@ -73,7 +73,9 @@ df_hist = read_parquets_to_df(folder="tomtom/historical", schema=tomtom_schema)
 df_hist = df_hist.drop('UNNAMED_FIELD')
 df_hist = df_hist.drop('timeValidity')
 
-df = df_hist.unionByName(df_live)
+#df = df_hist.unionByName(df_live)
+df = df_live
+df.show()
 df = df.withColumn('ny_timestamp', from_utc_timestamp(col('observationTime'), 'America/New_York'))
 df = df.withColumn('date', to_date(df.ny_timestamp))
 df = df.withColumn('hour', hour(df.ny_timestamp))
