@@ -17,21 +17,18 @@ sdf = (
 )
 
 sdf = sdf.withColumn("data", sdf.data.cast(StringType()))
-sdf_data = sdf.data
+
+# create dataframe out of the data column
+# ToDo
+# sdf_data = sdf.data
+
 
 query = (
-    sdf_data.writeStream.format("console")
+    sdf.writeStream.format("console")
     .outputMode("append")
     .trigger(processingTime="1 second")
     .start()
 )
-
-# query_data = (
-#     sdf.writeStream.format("console")
-#     .outputMode("append")
-#     .trigger(processingTime="1 second")
-#     .start()
-# )
 
 # # Wait 120 seconds (must be >= 60 seconds) to start receiving messages.
 query.awaitTermination(120)
