@@ -68,9 +68,9 @@ spark = SparkSession.builder.appName("read-app").master("yarn").getOrCreate()
 
 # CHECK NUMBER OF ROWS IN HISTORICAL
 
-df_historical = read_parquets_to_df(folder="stock/historical", schema=stock_schema)
+# df_historical = read_parquets_to_df(folder="stock/historical", schema=stock_schema)
 #df_hist = df_hist.drop('UNNAMED_FIELD')
-print(df_historical.count())
+# print(df_historical.count())
 
 ### READ FROM LIVE ###
 df_live = read_parquets_to_df(folder="stock/live", schema=stock_schema)
@@ -86,8 +86,8 @@ df_live.write.parquet(f"/stock/historical/stock-{curr_date}.parquet", mode="over
 
 # CHECK NUMBER OF ROWS IN HISTORICAL
 
-df_historical = read_parquets_to_df(folder="stock/historical", schema=stock_schema)
-print(df_historical.count())
+# df_historical = read_parquets_to_df(folder="stock/historical", schema=stock_schema)
+# print(df_historical.count())
 
 ### DELETE FROM LIVE ###
 hdfs_delete_files_from_dir(folder="stock/live")
