@@ -5,6 +5,9 @@ from pyspark.sql.functions import *
 import pyspark.sql.functions as F
 from pyspark.sql.types import *
 import os
+from google.cloud import bigtable
+import datetime
+import math
 
 def mode_result(df, colname):
     count = df.groupBy(['date', 'hour', colname]).count().alias('counts')
@@ -64,23 +67,26 @@ weather_schema = StructType([
 #df = spark.read.option("recursiveFileLookup", "true").parquet("/openweather/live")
 
 df_live = read_parquets_to_df(folder="openweather/live", schema=weather_schema)
-df_live = df_live.drop('wind_deg')
-#df_live.show()
+#df_live = df_live.drop('wind_deg')
+# df_live.show()
 
 
 df_hist = read_parquets_to_df(folder="openweather/historical", schema=weather_schema)
-df_hist = df_hist.drop('UNNAMED_FIELD')
+#df_hist = df_hist.drop('UNNAMED_FIELD')
 #df_hist.show()
 
-#df = df_hist.unionByName(df_live)
-df = df_live
+if df_live == None:
+    df = df_hist
+else:
+    df = df_hist.unionByName(df_live)
+
 #df.show()
 df = df.withColumn('date', to_date(df.timestamp))
 df = df.withColumn('hour', hour(df.timestamp))
 #df.show()
 
-#df_agg = df.groupBy("date", "hour") \
-df_agg = df.groupBy("date") \
+#df_agg = df.groupBy("date") \
+df_agg = df.groupBy("date", "hour") \
     .agg(round(avg("temp"),2).alias("avg_temp"), \
          round(avg("visibility"),2).alias("avg_visibility"), \
          round(avg("pressure"),2).alias("avg_pressure"), \
@@ -94,8 +100,56 @@ df_agg = df.groupBy("date") \
 weather_main_result = mode_result(df, 'weather_main')
 weather_description_result = mode_result(df, 'weather_description')
 
-#df_agg = df_agg.join(weather_main_result, ['date', 'hour']).join(weather_description_result, ['date', 'hour']).sort("date", "hour", ascending=[True, True])
+df_agg = df_agg.join(weather_main_result, ['date', 'hour']).join(weather_description_result, ['date', 'hour']).sort("date", "hour", ascending=[True, True])
 
 df_agg.show()
 #df_agg.show(n=df_agg.count(), truncate = False)
 print(f"The dataframe has {df_agg.count()} rows.")
+
+
+### WRITING TO BIGTABLE
+
+client = bigtable.Client(project="bda-project-412623", admin=True)
+instance = client.instance("bda-bigtable")
+table = instance.table("batch_openweather")
+timestamp = datetime.datetime.utcnow()
+
+df_len = df_agg.count()
+row_list = df_agg.collect()
+
+time_columns = ["date", "hour"]
+weather_avg_columns = ["avg_temp", "avg_pressure", "avg_clouds", "avg_clouds", "avg_feels_like", "avg_temp_max", "avg_temp_min", "avg_humidity", "avg_wind_speed"]
+weather_mode_colums = ["mode_weather_main", "mode_weather_description"]
+
+
+batch_size = 5000
+no_batches = math.ceil(df_len / batch_size)
+for batch in range(no_batches):
+    if batch == 0:
+        start = 0
+        end = batch_size
+    elif batch == no_batches - 1:
+        start += batch_size
+        end = df_len
+    else:
+        start+=batch_size
+        end+=batch_size
+    row_names = [str(row_list[i].__getitem__('date')) + '_' + str(row_list[i].__getitem__('hour')) for i in range(start, end)]
+    rows = [table.direct_row(row_name) for row_name in row_names]
+    for i in range(end-start):
+        for column in time_columns:
+            rows[i].set_cell("time", column, str(row_list[start+i].__getitem__(column)), timestamp)
+        for column in weather_avg_columns:
+            rows[i].set_cell("weather_avg", column, str(row_list[start+i].__getitem__(column)), timestamp)
+        for column in weather_mode_colums:
+            rows[i].set_cell("weather_mode", column, str(row_list[start+i].__getitem__(column)), timestamp)
+    response = table.mutate_rows(rows)
+    for i, status in enumerate(response):
+        if status.code != 0:
+            print("Error writing row: {}".format(status.message))
+
+    print("Successfully wrote {} rows.".format(df_len))
+
+
+
+

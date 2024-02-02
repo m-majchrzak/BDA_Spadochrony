@@ -112,7 +112,11 @@ df_assembled=assembler.transform(df_input)
 
 tomtom_results=model_tomtom.transform(df_assembled).withColumnRenamed("prediction", "tomtom_prediction")
 
+#print(tomtom_results)
+
 combined_results=model_stock.transform(tomtom_results).withColumnRenamed("prediction", "stock_prediction")
+
+#print(tomtom_results)
 
 # Define your output sink (e.g., write to console for testing)
 query = combined_results.writeStream.outputMode("append").format("console").start()

@@ -4,6 +4,9 @@ from pyspark.sql import *
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 import os
+from google.cloud import bigtable
+import datetime
+import math
 
 def cast_columns_to_schema(dataframe, schema):
     for field in schema.fields:
@@ -52,10 +55,14 @@ df_live = read_parquets_to_df(folder="stock/live", schema=stock_schema)
 #df_live.show()
 
 df_hist = read_parquets_to_df(folder="stock/historical", schema=stock_schema)
-df_hist = df_hist.drop('UNNAMED_FIELD')
+#df_hist = df_hist.drop('UNNAMED_FIELD')
 #df_hist.show()
 
-df = df_hist.unionByName(df_live)
+if df_live == None:
+    df = df_hist
+else:
+    df = df_hist.unionByName(df_live)
+
 #df = df_live
 df.show()
 df = df.withColumn('timestamp_from_datetime', df.datetime.cast(dataType=TimestampType()))
@@ -69,9 +76,9 @@ df_agg = df.groupBy("date", "hour") \
         round(avg("transactions"),2).alias("avg_transactions"),
         round(avg("volume"),2).alias("avg_volume"), 
         round(avg("open"),2).alias("avg_open"),
+        round(avg("close"),2).alias("avg_close"),
         round(avg("high"),2).alias("avg_high"),
         round(avg("low"),2).alias("avg_low"),
-        round(avg("open"),2).alias("avg_open"),
         round(avg("vwap"),2).alias("avg_vwap")) \
     .sort("date", "hour", ascending=[True, True])
 
@@ -79,3 +86,45 @@ df_agg = df.groupBy("date", "hour") \
 df_agg.show()
 #df_agg.show(n=df_agg.count(), truncate = False)
 print(f"The dataframe has {df_agg.count()} rows.")
+
+### WRITING TO BIGTABLE
+
+client = bigtable.Client(project="bda-project-412623", admin=True)
+instance = client.instance("bda-bigtable")
+table = instance.table("batch_stock")
+timestamp = datetime.datetime.utcnow()
+
+df_len = df_agg.count()
+row_list = df_agg.collect()
+
+time_columns = ["date", "hour"]
+stock_columns = ["count", "avg_transactions", "avg_volume", "avg_open", "avg_close", "avg_high", "avg_low", "avg_vwap"]
+
+batch_size = 5000
+no_batches = math.ceil(df_len / batch_size)
+for batch in range(no_batches):
+    if batch == 0:
+        start = 0
+        if no_batches == 1:
+            end = df_len
+        else:
+            end = batch_size
+    elif batch == no_batches - 1:
+        start += batch_size
+        end = df_len
+    else:
+        start+=batch_size
+        end+=batch_size
+    row_names = [str(row_list[i].__getitem__('date')) + '_' + str(row_list[i].__getitem__('hour')) for i in range(start, end)]
+    rows = [table.direct_row(row_name) for row_name in row_names]
+    for i in range(end-start):
+        for column in time_columns:
+            rows[i].set_cell("time", column, str(row_list[start+i].__getitem__(column)), timestamp)
+        for column in stock_columns:
+            rows[i].set_cell("stock", column, str(row_list[start+i].__getitem__(column)), timestamp)
+    response = table.mutate_rows(rows)
+    for i, status in enumerate(response):
+        if status.code != 0:
+            print("Error writing row: {}".format(status.message))
+
+    print("Successfully wrote {} rows.".format(end-start))

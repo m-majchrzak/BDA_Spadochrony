@@ -5,6 +5,9 @@ from pyspark.sql.functions import *
 import pyspark.sql.functions as F
 from pyspark.sql.types import *
 import os
+from google.cloud import bigtable
+import datetime
+import math
 
 def mode_result_by_category_and_id(df, colname):
     count = df.groupBy(['date', 'hour', 'iconCategory', 'id', colname]).count().alias('counts')
@@ -67,15 +70,19 @@ tomtom_schema = StructType([
 ])
 
 df_live = read_parquets_to_df(folder="tomtom/live", schema=tomtom_schema)
-df_live = df_live.drop('timeValidity')
+# df_live = df_live.drop('timeValidity')
 
 df_hist = read_parquets_to_df(folder="tomtom/historical", schema=tomtom_schema)
-df_hist = df_hist.drop('UNNAMED_FIELD')
-df_hist = df_hist.drop('timeValidity')
+# df_hist = df_hist.drop('UNNAMED_FIELD')
+# df_hist = df_hist.drop('timeValidity')
 
 #df = df_hist.unionByName(df_live)
-df = df_live
-df.show()
+if df_live == None:
+    df = df_hist
+else:
+    df = df_hist.unionByName(df_live)
+#df.show()
+    
 df = df.withColumn('ny_timestamp', from_utc_timestamp(col('observationTime'), 'America/New_York'))
 df = df.withColumn('date', to_date(df.ny_timestamp))
 df = df.withColumn('hour', hour(df.ny_timestamp))
@@ -118,3 +125,46 @@ df_agg = df_agg.join(probabilityOfOccurence_result_by_category, ['date', 'hour',
 df_agg.show()
 #df_agg.show(n=df_agg.count(), truncate = False) 
 print(f"The dataframe has {df_agg.count()} rows.")
+
+### WRITING TO BIGTABLE
+
+client = bigtable.Client(project="bda-project-412623", admin=True)
+instance = client.instance("bda-bigtable")
+table = instance.table("batch_tomtom")
+timestamp = datetime.datetime.utcnow()
+
+df_len = df_agg.count()
+row_list = df_agg.collect()
+
+time_columns = ["date", "hour"]
+tomtom_columns = ["iconCategory", "count_id", "avg_delay", "avg_length", "mode_probabilityOfOccurrence", "mode_magnitudeOfDelay"]
+
+batch_size = 5000
+no_batches = math.ceil(df_len / batch_size)
+for batch in range(no_batches):
+    if batch == 0:
+        start = 0
+        if no_batches == 1:
+            end = df_len
+        else:
+            end = batch_size
+    elif batch == no_batches - 1:
+        start += batch_size
+        end = df_len
+    else:
+        start+=batch_size
+        end+=batch_size
+        
+    row_names = [str(row_list[i].__getitem__('date')) + '_' + str(row_list[i].__getitem__('hour')) for i in range(start, end)]
+    rows = [table.direct_row(row_name) for row_name in row_names]
+    for i in range(end-start):
+        for column in time_columns:
+            rows[i].set_cell("time", column, str(row_list[start+i].__getitem__(column)), timestamp)
+        for column in tomtom_columns:
+            rows[i].set_cell("tomtom", column, str(row_list[start+i].__getitem__(column)), timestamp)
+    response = table.mutate_rows(rows)
+    for i, status in enumerate(response):
+        if status.code != 0:
+            print("Error writing row: {}".format(status.message))
+
+    print("Successfully wrote {} rows.".format(end-start))
