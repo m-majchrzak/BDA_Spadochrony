@@ -77,11 +77,13 @@ df_hist = read_parquets_to_df(folder="tomtom/historical", schema=tomtom_schema)
 # df_hist = df_hist.drop('timeValidity')
 
 #df = df_hist.unionByName(df_live)
-if df_live == None:
-    df = df_hist
-else:
-    df = df_hist.unionByName(df_live)
+# if df_live == None:
+#     df = df_hist
+# else:
+#     df = df_hist.unionByName(df_live)
 #df.show()
+    
+df = df_live
     
 df = df.withColumn('ny_timestamp', from_utc_timestamp(col('observationTime'), 'America/New_York'))
 df = df.withColumn('date', to_date(df.ny_timestamp))
@@ -154,7 +156,7 @@ for batch in range(no_batches):
     else:
         start+=batch_size
         end+=batch_size
-        
+
     row_names = [str(row_list[i].__getitem__('date')) + '_' + str(row_list[i].__getitem__('hour')) for i in range(start, end)]
     rows = [table.direct_row(row_name) for row_name in row_names]
     for i in range(end-start):

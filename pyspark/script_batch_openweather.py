@@ -75,10 +75,12 @@ df_hist = read_parquets_to_df(folder="openweather/historical", schema=weather_sc
 #df_hist = df_hist.drop('UNNAMED_FIELD')
 #df_hist.show()
 
-if df_live == None:
-    df = df_hist
-else:
-    df = df_hist.unionByName(df_live)
+# if df_live == None:
+#     df = df_hist
+# else:
+#     df = df_hist.unionByName(df_live)
+
+df = df_live
 
 #df.show()
 df = df.withColumn('date', to_date(df.timestamp))
@@ -127,7 +129,10 @@ no_batches = math.ceil(df_len / batch_size)
 for batch in range(no_batches):
     if batch == 0:
         start = 0
-        end = batch_size
+        if no_batches == 1:
+            end = df_len
+        else:
+            end = batch_size
     elif batch == no_batches - 1:
         start += batch_size
         end = df_len
@@ -148,7 +153,7 @@ for batch in range(no_batches):
         if status.code != 0:
             print("Error writing row: {}".format(status.message))
 
-    print("Successfully wrote {} rows.".format(df_len))
+    print("Successfully wrote {} rows.".format(end-start))
 
 
 

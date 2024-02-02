@@ -58,12 +58,14 @@ df_hist = read_parquets_to_df(folder="stock/historical", schema=stock_schema)
 #df_hist = df_hist.drop('UNNAMED_FIELD')
 #df_hist.show()
 
-if df_live == None:
-    df = df_hist
-else:
-    df = df_hist.unionByName(df_live)
+# if df_live == None:
+#     df = df_hist
+# else:
+#     df = df_hist.unionByName(df_live)
 
-#df = df_live
+
+df = df_live
+
 df.show()
 df = df.withColumn('timestamp_from_datetime', df.datetime.cast(dataType=TimestampType()))
 df = df.withColumn('ny_timestamp', from_utc_timestamp(col('timestamp_from_datetime'), 'America/New_York'))
