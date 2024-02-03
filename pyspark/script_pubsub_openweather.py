@@ -12,8 +12,12 @@ from pyspark.sql.functions import udf
 
 from pyspark.streaming import StreamingContext
 
+PROJECT="bda-project-412623"
+INSTANCE="bda-bigtable"
+TABLE="stream"
+
 # Create a StreamingContext with a batch interval of 60 seconds (1 minute)
-ssc = StreamingContext(spark.sparkContext, 180)
+# ssc = StreamingContext(spark.sparkContext, 180)
 
 project_number = 684093064430
 location = "europe-central2" 
@@ -40,8 +44,7 @@ weather_schema = StructType([
 # Read streaming data from Pub/Sub Lite
 
 sdf = (spark.readStream.format("pubsublite")
-    .option("pubsublite.subscription", f"projects/{project_number}/locations/{location}/subscriptions/{subscription_id1}",).load())
-
+    .option("pubsublite.subscription", f"projects/{project_number}/locations/{location}/subscriptions/{subscription_id1}").load())
 # Convert the binary "data" column to a string and all columns inside to string through schema
 sdf_parsed = sdf.withColumn("data", F.from_json(F.col("data").cast(StringType()), weather_schema))
 
@@ -61,6 +64,8 @@ sdf_casted = sdf_parsed.select(
     F.col("data.timestamp").cast(DoubleType()).cast(TimestampType()).alias("timestamp"),
     F.col("publish_timestamp"),
 )
+#drop nonunique rows
+sdf_casted=sdf_casted.withWatermark("timestamp", "10 minutes").dropDuplicates(["timestamp"])
 
 ## Transform columns into features
 df_onehot = sdf_casted.select(F.col("timestamp"), F.col("weather_main"))
@@ -155,6 +160,8 @@ stock_sdf_casted = stock_sdf_parsed.select(
     F.col("data.datetime").cast(TimestampType()).alias("datetime"),
     F.col("publish_timestamp"),
 )
+#drop nonunique rows
+stock_sdf_casted=stock_sdf_casted.withWatermark("datetime", "10 minutes").dropDuplicates(["datetime"])
 
 # combine combined_results (timestamp, publish_timestamp) with stock_sdf_casted (datetime, publish_timestamp?) (using timestamp??)
 # https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html#stream-stream-joins
@@ -167,62 +174,47 @@ results = combined_results.select(F.col("timestamp"),F.col("date"), F.col("hour"
                                   F.col("temp"), F.col("pressure"), F.col("clouds"), F.col("clouds"), F.col("feels_like"), F.col("temp_max"), F.col("temp_min"), F.col("humidity"), F.col("wind_speed"), F.col("weather_main"), F.col("weather_description"), 
                                   # stock columns
                                     F.col("tomtom_prediction"), F.col("stock_prediction"))
-
-# Define your output sink (e.g., write to console for testing)
-#query = combined_results.writeStream.outputMode("append").format("console").start()
-
-### WRITING TO BIGTABLE
-
+results
 # WRITING TO BIGTABLE
 
 # Define the columns for each column group
-
 columns_to_save={
     "time":("date", "hour"),
     "weather":("temp", "pressure", "clouds", "feels_like", "temp_max", "temp_min", "humidity", "wind_speed", "weather_main", "weather_description"),
     "predictions":("tomtom_prediction", "stock_prediction"),
 }
 
-# Function to process each row and write to Bigtable
-@udf(StringType())
-def process_row(timestamp,date, hour, temp, pressure, clouds, feels_like, temp_max, temp_min, humidity, wind_speed, weather_main, weather_description, tomtom_prediction, stock_prediction):
-    table = bigtable.Client(project="bda-project-412623", admin=True).instance("bda-bigtable").table("stream")
-    update_timestamp = datetime.datetime.utcnow()
-    row_key = str(timestamp)
-    new_row = table.direct_row(row_key)
-    for family,columns in columns_to_save.items():
-            for column in columns:
-                new_row.set_cell(family, column, str(locals()[column]), update_timestamp)
-    new_row.commit()
-    return "Row processed successfully"
-
-
-# Apply the UDF to your DataFrame
-query=results.withColumn("status", process_row(*(["timestamp"]+ [c for col_list in columns_to_save.values() for c in col_list]))).writeStream.outputMode("append").format("console").trigger(once=True).start()
-
-
 
 def process_batch(batch_df, batch_id):
-    client = bigtable.Client(project="bda-project-412623", admin=True)
-    table=client.instance("bda-bigtable").table("stream")
+    client = bigtable.Client(project=PROJECT, admin=True)
+    table=client.instance(INSTANCE).table(TABLE)
+    timestamp=datetime.datetime.utcnow()
     rows_to_mutate=[]
     for row in batch_df.collect():
-        new_row = table.direct_row(row["timestamp"].strftime("%Y-%m-%d_%H-%M"))
+        row_key = row["timestamp"].strftime("%Y-%m-%d_%H-%M")
+        print(f"Data for {row_key} created")
+        new_row = table.direct_row(row_key)
         for column_family,columns in columns_to_save.items():
                 for column in columns:
                     new_row.set_cell(
                         column_family_id=column_family,
                         column=column,
-                        value=row[column],
-                        timestamp=datetime.datetime.utcnow(),
+                        value=str(row[column]),
+                        timestamp=timestamp,
                     )
         rows_to_mutate.append(new_row)
     table.mutate_rows(rows_to_mutate)
-    return "Batch processed successfully"
+    print(f"Batch {batch_id} processed successfully")
+    return
 
-
+# process batches of data
 query = (
     results.writeStream
     .foreachBatch(process_batch)
-    .outputMode("append").format("console").trigger(once=True).start()
+    .option("checkpointLocation", "/tmp/checkpoint_streaming/")
+    .outputMode("append")
+    .start()
 )
+
+query.awaitTermination(300)
+query.stop()
