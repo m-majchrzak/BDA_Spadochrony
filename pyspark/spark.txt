@@ -22,12 +22,11 @@ gcloud dataproc jobs submit pyspark script_ML.py ^
     --cluster=bda-dataproc ^
     --driver-log-levels=root=INFO ^
     --properties=spark.master=yarn 
-gcloud dataproc jobs submit pyspark script_ML_stock.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=ERROR --properties=spark.master=yarn
-gcloud dataproc jobs submit pyspark script_batch_stock.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=WARN  --properties=spark.master=yarn
+gcloud dataproc jobs submit pyspark script_batch_stock.py --region=europe-central2 --cluster=bda-datapdroc --driver-log-levels=root=WARN  --properties=spark.master=yarn
 
-gcloud dataproc jobs submit pyspark script_ML_stock.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=WARN  --properties=spark.master=yarn
+gcloud dataproc jobs submit pyspark script_ML_stock.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=ERROR  --properties=spark.master=yarn
 
-gcloud dataproc jobs submit pyspark script_ML_tomtom.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=WARN  --properties=spark.master=yarn
+gcloud dataproc jobs submit pyspark script_ML_tomtom.py --region=europe-central2 --cluster=bda-dataproc --driver-log-levels=root=ERROR  --properties=spark.master=yarn
 
 gcloud dataproc jobs submit pyspark check_python_env.py --cluster=bda-dataproc --region=europe-central2 -- pandas scipy
 
