@@ -126,6 +126,8 @@ df_onehot = df_onehot.withColumn("wm_other", F.when(df_onehot.pom == 0, 1).other
 df_onehot = df_onehot.drop(df_onehot.pom).drop(df_onehot.weather_main)
 
 df = df.join(df_onehot, ["timestamp"])
+df=df.withColumn("timestamp",F.date_trunc("minute",df.timestamp))
+
 df = df.drop(F.col("weather_main")).sort("timestamp", ascending=True)
 
 # df.show()
@@ -177,6 +179,7 @@ window_spec = (
 df_tomtom_agg = df_tomtom_agg.withColumn(
     "avg_length_of_traffic_jams", F.avg("length_of_traffic_jams").over(window_spec)
 )
+df_tomtom_agg=df_tomtom_agg.withColumn("timestamp",F.date_trunc("minute",df_tomtom_agg.timestamp))
 
 df = df.join(df_tomtom_agg, ["timestamp"])
 df.agg(
@@ -251,4 +254,4 @@ print("###")
 
 
 # save the model
-model.save("/models/tomtom_model")
+model.write().overwrite().save("/models/tomtom_model2")
