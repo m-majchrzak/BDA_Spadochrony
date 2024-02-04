@@ -122,6 +122,8 @@ df_onehot = df_onehot.drop(df_onehot.pom).drop(df_onehot.weather_main)
 df = df.join(df_onehot, ["timestamp"])
 df = df.drop(F.col("weather_main")).sort("timestamp", ascending=True)
 
+df=df.withColumn("timestamp",F.date_trunc("minute",df.timestamp))
+
 
 ### TARGET VARIABLE ###
 
@@ -168,6 +170,8 @@ df_stock_agg = df_stock_agg.withColumn(
     "number_of_transactions", F.sum("transactions").over(window_spec)
 )
 df_stock_agg = df_stock_agg.select(F.col("number_of_transactions"), F.col("timestamp"))
+df_stock_agg=df_stock_agg.withColumn("timestamp",F.date_trunc("minute",df_stock_agg.timestamp))
+
 df = df.join(df_stock_agg, ["timestamp"])
 
 df.agg(
@@ -234,4 +238,4 @@ print("\n\n\n###")
 
 
 # save the model
-model.save("/models/stock_model")
+model.write().overwrite().save("/models/stock_model")
