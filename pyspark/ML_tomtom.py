@@ -254,4 +254,4 @@ print("###")
 
 
 # save the model
-model.write().overwrite().save("/models/tomtom_model2")
+model.write().overwrite().save("/models/tomtom_model")
