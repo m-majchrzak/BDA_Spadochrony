@@ -13,14 +13,10 @@ from pyspark.streaming import StreamingContext
 from pyspark.sql.functions import expr
 from pyspark.sql.functions import coalesce
 
-PROJECT="bda-project-412623"
+PROJECT="grand-harbor-413313"
 INSTANCE="bda-bigtable"
 TABLE="stream"
-
-# Create a StreamingContext with a batch interval of 60 seconds (1 minute)
-# ssc = StreamingContext(spark.sparkContext, 180)
-
-project_number = 684093064430
+project_number = 518523499774
 location = "europe-central2" 
 subscription_id1 = "weather-spark"
 subscription_id2 = "stock-spark"
@@ -68,7 +64,7 @@ sdf_casted = sdf_parsed.select(
     F.col("data.temp_min").cast(DoubleType()).alias("temp_min"),
     F.col("data.humidity").cast(IntegerType()).alias("humidity"),
     F.col("data.wind_speed").cast(DoubleType()).alias("wind_speed"),
-    F.col("data.timestamp").cast(DoubleType()).cast(TimestampType()).alias("timestamp"),
+    F.col("data.timestamp").alias("timestamp"),
     F.col("publish_timestamp"),
 )
 
@@ -143,4 +139,3 @@ query.stop()
 # query = combined_results_with_watermark.writeStream.outputMode("append").format("console").start()
 # query.awaitTermination(120)
 # query.stop()
-

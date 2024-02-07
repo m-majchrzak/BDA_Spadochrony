@@ -13,7 +13,10 @@ from pyspark.streaming import StreamingContext
 from pyspark.sql.functions import expr
 from pyspark.sql.functions import coalesce
 
-project_number = 684093064430
+PROJECT="grand-harbor-413313"
+INSTANCE="bda-bigtable"
+TABLE="stream"
+project_number = 518523499774
 location = "europe-central2" 
 subscription_id1 = "weather-spark"
 subscription_id2 = "stock-spark"
@@ -55,8 +58,8 @@ stock_sdf_casted = stock_sdf_parsed.select(
     F.col("data.status").cast(StringType()).alias("status"),
     F.col("data.datetime").cast(TimestampType()).alias("datetime"),
     F.col("publish_timestamp"),
-)#.dropDuplicates(["datetime"])
-#drop nonunique rows 
+)
+
 
 # if datetime is null (on weekends) fill it with publish_timestamp
 # stock_sdf_casted = stock_sdf_casted.withColumn("datetime",coalesce(stock_sdf_casted.datetime,stock_sdf_casted.publish_timestamp))

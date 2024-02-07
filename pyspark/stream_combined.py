@@ -13,14 +13,10 @@ from pyspark.streaming import StreamingContext
 from pyspark.sql.functions import expr
 from pyspark.sql.functions import coalesce
 
-PROJECT="bda-project-412623"
+PROJECT="grand-harbor-413313"
 INSTANCE="bda-bigtable"
 TABLE="stream"
-
-# Create a StreamingContext with a batch interval of 60 seconds (1 minute)
-# ssc = StreamingContext(spark.sparkContext, 180)
-
-project_number = 684093064430
+project_number = 518523499774
 location = "europe-central2" 
 subscription_id1 = "weather-spark"
 subscription_id2 = "stock-spark"
@@ -42,7 +38,7 @@ weather_schema = StructType([
     StructField("temp_min", StringType(), True),
     StructField("humidity", StringType(), True),
     StructField("wind_speed", StringType(), True),
-    StructField("timestamp", StringType(), True),
+    StructField("timestamp", StringType(), True)
 ])
 
 # Read streaming data from Pub/Sub Lite
@@ -68,7 +64,7 @@ sdf_casted = sdf_parsed.select(
     F.col("data.temp_min").cast(DoubleType()).alias("temp_min"),
     F.col("data.humidity").cast(IntegerType()).alias("humidity"),
     F.col("data.wind_speed").cast(DoubleType()).alias("wind_speed"),
-    F.col("data.timestamp").cast(DoubleType()).cast(TimestampType()).alias("timestamp"),
+    F.col("data.timestamp").cast(TimestampType()).alias("timestamp"),
     F.col("publish_timestamp"),
 )
 #drop nonunique rows
@@ -165,7 +161,7 @@ stock_sdf_casted = stock_sdf_parsed.select(
     F.col("data.ticker").cast(StringType()).alias("ticker"),
     F.col("data.status").cast(StringType()).alias("status"),
     F.col("data.datetime").cast(TimestampType()).alias("datetime"),
-    F.col("publish_timestamp"))#.dropDuplicates(["datetime"])
+    F.col("publish_timestamp"))
 #drop nonunique rows 
 
 
@@ -180,20 +176,13 @@ combined_results_with_watermark = combined_results.withWatermark("timestamp_weat
 # query.awaitTermination(120)
 # query.stop()
 
-stock_sdf_casted = stock_sdf_casted.withColumn("timestamp_stock", stock_sdf_casted.publish_timestamp)
+stock_sdf_casted = stock_sdf_casted.withColumn("timestamp_stock", stock_sdf_casted.datetime)
 stock_sdf_casted = stock_sdf_casted.withColumn("date_stock", F.to_date(stock_sdf_casted.timestamp_stock))
 #stock_sdf_casted = stock_sdf_casted.dropDuplicates(["timestamp_stock"])
 stock_with_watermark=stock_sdf_casted.withWatermark("timestamp_stock", "1 minutes")
 # query = stock_with_watermark.writeStream.outputMode("append").format("console").start()
 # query.awaitTermination(120)
 # query.stop()
-
-# # Window the data
-# combined_results_with_window = combined_results_with_watermark.groupBy(F.window(F.col("timestamp_weather"), "10 minutes"))
-# stock_with_window = stock_with_watermark.groupBy(F.window(F.col("timestamp_stock"), "1 minutes"))
-
-# # Join the streams on the window column
-# joined_results = combined_results_with_window.join(stock_with_window, ["window"], "inner")
 
 
 # combine combined_results (timestamp, publish_timestamp) with stock_sdf_casted (datetime, publish_timestamp?) (using timestamp??)
@@ -202,10 +191,10 @@ joined_results = combined_results_with_watermark.join(
   stock_with_watermark,
   expr("""
     date_weather = date_stock AND
-    timestamp_weather <= timestamp_stock AND
-    timestamp_weather >= timestamp_stock + interval 2 minutes
+    timestamp_weather >= timestamp_stock - interval 30 seconds AND
+    timestamp_weather <= timestamp_stock + interval 30 seconds
     """),
-  "fullOuter"                 # can be "inner", "leftOuter", "rightOuter", "fullOuter", "leftSemi"
+  "fullOuter"                 # can be "inner", "leftOuter", "rightOuter", "fllOuter", "leftSemi"
 )
 
 # https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html#stream-stream-joins
@@ -221,50 +210,49 @@ results = joined_results.select(F.col("timestamp_weather"),F.col("timestamp_stoc
                                 F.col("tomtom_prediction"), F.col("stock_prediction")
                                 )
 
-query = results.writeStream.outputMode("append").format("console").start()
-query.awaitTermination(240)
-query.stop()
+# query = results.writeStream.outputMode("append").format("console").start()
+# query.awaitTermination()
 
 # WRITING TO BIGTABLE
 
 # Define the columns for each column group
-# columns_to_save={
-#     "time":("timestamp_weather", "timestamp_stock", "date", "hour"),
-#     "weather":("temp", "pressure", "clouds", "feels_like", "temp_max", "temp_min", "humidity", "wind_speed", "weather_main", "weather_description"),
-#     "stock":("volume", "vmap", "open", "close", "high", "low", "transactions", "ticker", "status"),
-#     "predictions":("tomtom_prediction", "stock_prediction"),
-# }
+columns_to_save={
+    "time":("timestamp_weather", "timestamp_stock", "date", "hour"),
+    "weather":("temp", "pressure", "clouds", "feels_like", "temp_max", "temp_min", "humidity", "wind_speed", "weather_main", "weather_description"),
+    "stock":("volume", "vmap", "open", "close", "high", "low", "transactions", "ticker", "status"),
+    "predictions":("tomtom_prediction", "stock_prediction"),
+}
 
 
-# def process_batch(batch_df, batch_id):
-#     client = bigtable.Client(project=PROJECT, admin=True)
-#     table=client.instance(INSTANCE).table(TABLE)
-#     timestamp=datetime.datetime.utcnow()
-#     rows_to_mutate=[]
-#     for row in batch_df.collect():
-#         row_key = row["timestamp_weather"].strftime("%Y-%m-%d_%H-%M")
-#         print(f"Data for {row_key} created")
-#         new_row = table.direct_row(row_key)
-#         for column_family,columns in columns_to_save.items():
-#                 for column in columns:
-#                     new_row.set_cell(
-#                         column_family_id=column_family,
-#                         column=column,
-#                         value=str(row[column]),
-#                         timestamp=timestamp,
-#                     )
-#         rows_to_mutate.append(new_row)
-#     table.mutate_rows(rows_to_mutate)
-#     print(f"Batch {batch_id} processed successfully")
-#     return
+def process_batch(batch_df, batch_id):
+    client = bigtable.Client(project=PROJECT, admin=True)
+    table=client.instance(INSTANCE).table(TABLE)
+    timestamp=datetime.datetime.utcnow()
+    rows_to_mutate=[]
+    for row in batch_df.collect():
+        row_key = row["timestamp_weather"].strftime("%Y-%m-%d_%H-%M")
+        print(f"Data for {row_key} created")
+        new_row = table.direct_row(row_key)
+        for column_family,columns in columns_to_save.items():
+                for column in columns:
+                    new_row.set_cell(
+                        column_family_id=column_family,
+                        column=column,
+                        value=str(row[column]),
+                        timestamp=timestamp,
+                    )
+        rows_to_mutate.append(new_row)
+    table.mutate_rows(rows_to_mutate)
+    print(f"Batch {batch_id} processed successfully")
+    return
 
-# # process batches of data
-# query = (
-#     results.writeStream
-#     .foreachBatch(process_batch)
-#     #.option("checkpointLocation", "/tmp/checkpoint_streaming/")
-#     .outputMode("append")
-#     .start()
-# )
+# process batches of data
+query = (
+    results.writeStream
+    .foreachBatch(process_batch)
+    .option("checkpointLocation", "/tmp/checkpoint_streaming/")
+    .outputMode("append")
+    .start()
+)
 
-# query.awaitTermination()
+query.awaitTermination()

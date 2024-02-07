@@ -67,7 +67,7 @@ weather_schema = StructType([
 #df = spark.read.option("recursiveFileLookup", "true").parquet("/openweather/live")
 
 df_live = read_parquets_to_df(folder="openweather/live", schema=weather_schema)
-#df_live = df_live.drop('wind_deg')
+
 # df_live.show()
 
 
@@ -111,7 +111,7 @@ print(f"The dataframe has {df_agg.count()} rows.")
 
 ### WRITING TO BIGTABLE
 
-client = bigtable.Client(project="bda-project-412623", admin=True)
+client = bigtable.Client(project="grand-harbor-413313", admin=True)
 instance = client.instance("bda-bigtable")
 table = instance.table("batch_openweather")
 timestamp = datetime.datetime.utcnow()
@@ -154,7 +154,6 @@ for batch in range(no_batches):
             print("Error writing row: {}".format(status.message))
 
     print("Successfully wrote {} rows.".format(end-start))
-
 
 
 

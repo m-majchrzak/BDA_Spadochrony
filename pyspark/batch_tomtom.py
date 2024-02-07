@@ -76,12 +76,10 @@ df_hist = read_parquets_to_df(folder="tomtom/historical", schema=tomtom_schema)
 # df_hist = df_hist.drop('UNNAMED_FIELD')
 # df_hist = df_hist.drop('timeValidity')
 
-#df = df_hist.unionByName(df_live)
 # if df_live == None:
 #     df = df_hist
 # else:
 #     df = df_hist.unionByName(df_live)
-#df.show()
     
 df = df_live
     
@@ -130,7 +128,7 @@ print(f"The dataframe has {df_agg.count()} rows.")
 
 ### WRITING TO BIGTABLE
 
-client = bigtable.Client(project="bda-project-412623", admin=True)
+client = bigtable.Client(project="grand-harbor-413313", admin=True)
 instance = client.instance("bda-bigtable")
 table = instance.table("batch_tomtom")
 timestamp = datetime.datetime.utcnow()

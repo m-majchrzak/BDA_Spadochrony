@@ -91,7 +91,7 @@ print(f"The dataframe has {df_agg.count()} rows.")
 
 ### WRITING TO BIGTABLE
 
-client = bigtable.Client(project="bda-project-412623", admin=True)
+client = bigtable.Client(project="grand-harbor-413313", admin=True)
 instance = client.instance("bda-bigtable")
 table = instance.table("batch_stock")
 timestamp = datetime.datetime.utcnow()
